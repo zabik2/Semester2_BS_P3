@@ -81,7 +81,7 @@ int calc(int pc){
 }
 
 int main() {
-    int pc = 0;
+    int ProgrammCounter = 0;
     unsigned int timer = 0;
     int EA = 4;
     vector<int> IDvector;
@@ -91,6 +91,10 @@ int main() {
     vector <int> VerweilzeitVector;
     vector <long> CPUTimeUsed;
     vector <int> Akkumulator;
+
+
+    int Blockdurchlaufen = 0;
+
 
     unsigned int simulateTicks = 0;
     float countProc = 1;
@@ -111,137 +115,73 @@ int main() {
             }
             break;
         }
-        if(pc != -1 && Process::processes.size() <= pc){
-            pc = 0;
+        if(ProgrammCounter != -1 && Process::processes.size() <= ProgrammCounter){
+            ProgrammCounter = 0;
         }
         if(simulateTicks <= 0){
-            string input;
             cout.clear();
             cin.clear();
             cout<<std::endl<<">> ";
-            getline(cin, input);
             cout.clear();
             cin.clear();
 
-            std::transform(input.begin(), input.end(), input.begin(),
-                           [](unsigned char c){ return std::tolower(c); });
-            cout << "CURRENT TIME: "<<timer <<std::endl;
-            cout << "RUNNING PROCESS:" <<std::endl;
-            cout << "timer \tpid \tFileName \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
+            cout << "timer \tpid \tFileName \tPC \tAkku \tstart time \tBefehl" <<std::endl;
 
-            if(input[0] == 's' || input == "step"){
-                simulateTicks = 1;
-                continue;
-            }else if(input[0] == 'u' || input == "unblock"){    // Vorzeitiges unblock
-                if(!blocked.empty()){
-                    Process* b = blocked.front();
-                    b->state = EXECUTE;
-                    if(pc >= 0)
-                        Process::processes[pc]->state = WAIT;
-                    for(int i = 0; i < Process::processes.size(); i++) {
-                        Process *p = Process::processes[i];
-                        if(p->getPid() == b->getPid()){
-                            pc = i;
-                            break;
-                        }
-                    }
-                    blocked.erase(blocked.begin());
-                }
-                continue;
+            simulateTicks = 1000;
 
-            }else if(input[0] == 'd'|| input == "dump"){
-                cout << "****************************************************************" <<std::endl;
-                cout << "The current system state is as follows:" <<std::endl;
-                cout << "****************************************************************" <<std::endl;
-                cout << "CURRENT TIME: "<<timer <<std::endl;
-                cout << "RUNNING PROCESS:" <<std::endl;
-                cout << "pid \tppid \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
-                if(!Process::processes.empty() && pc >= 0) {
-                    Process *running = Process::processes[pc];
-                    if (running && running->state != BLOCKED)
-                        std::cout << running->getPid() << " \t" << running->ppid << " \t" << running->CommandCounter
-                                  << " \t\t" << running->reg << " \t" << running->startTime << " \t\t" << running->time << std::endl;
-                }
-                cout << "BLOCKED PROCESS:" <<std::endl;
-                cout << "pid \tppid \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
-                for(Process* p : blocked){
-                    if(p->state == BLOCKED)
-                        std::cout << p->getPid() << " \t" << p->ppid << " \t" << p->CommandCounter << " \t\t" << p->reg << " \t" << p->startTime << " \t\t" << p->time << std::endl;
-                }
-                std::cout << "PROCESS READY TO EXECUTE:" <<std::endl;
-                std::cout << "pid \tppid \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
-                for(int i = 0; i < Process::processes.size(); i++){
-                    Process* p = Process::processes[i];
-                    if(p->state == WAIT && i != pc)
-                        std::cout << p->getPid() << " \t" << p->ppid << " \t" << p->CommandCounter << " \t\t" << p->reg << " \t" << p->startTime << " \t\t" << p->time << std::endl;
-                }
-
-
-            }else if(input[0] == 'r' || input == "run"){
-                simulateTicks = 100;
-
-                continue;
-            }else if(input[0] == 'q' || input == "quit"){
-                break;
-            }
-            continue;
         }
+        if(!Process::processes.empty() && ProgrammCounter >= 0) {
+            Process *running = Process::processes[ProgrammCounter];
+            if (running && running->state != BLOCKED)
+                std::cout << "\t" << timer << "\t" << running->getPid() << "\t" << running->FileName << " \t\t"  << running->CommandCounter
+                          << " \t" << running->reg << " \t" << running->startTime << " \t\t"  << running->Befehl << std::endl;
+        }
+        else
+            std::cout << "\t" << timer << "\t Blocked durch EA und keine andere Prozesse verfügbar" << std::endl;
 
 
             if (!blocked.empty()) {// EA Simulation
                 Process *b = blocked.front();
-                if (timer - b->BlockedTime >= EA){
-                b->state = EXECUTE;
-                if (pc >= 0)
-                    Process::processes[pc]->state = WAIT;
-                for (int i = 0; i < Process::processes.size(); i++) {
-                    Process *p = Process::processes[i];
-                    if (p->getPid() == b->getPid()) {
-                        pc = i;
-                        break;
-                    }
-                }
+
+                Blockdurchlaufen++;
+                //timer - b->BlockedTime >= EA
+                if (Blockdurchlaufen >= EA){
+                    b->state = WAIT;
+                    Blockdurchlaufen = 0;
+                    if (ProgrammCounter >= 0)
+                       Process::processes[ProgrammCounter]->state = WAIT;
                 blocked.erase(blocked.begin());
             }
         }
 
-
-        if(!Process::processes.empty() && pc >= 0) {
-            Process *running = Process::processes[pc];
-            if (running && running->state != BLOCKED)
-                std::cout << timer << "\t" << running->getPid() << "\t" << running->FileName << " \t\t"  << running->CommandCounter
-                          << " \t" << running->reg << " \t" << running->startTime << " \t\t" << running->time << std::endl;
-        }
-        else
-            std::cout << timer << "\t Blocked durch EA und keine andere Prozesse verfügbar" << std::endl;
         //Sim CPU
         if(!Process::processes.empty()) {
             try {
-                if(pc >= 0) {
-                    processExec(*Process::processes[pc]);
+                if(ProgrammCounter >= 0) {
+                    processExec(*Process::processes[ProgrammCounter]);
 
-                    if (Process::processes[pc]->state == END) {
+                    if (Process::processes[ProgrammCounter]->state == END) {
                         simulateTicks = 1;
-                        IDvector.push_back(Process::processes[pc]->getPid());
-                        FileNameVector.push_back(Process::processes[pc]->FileName);
-                        StartTimeVector.push_back(Process::processes[pc]->startTime);
+                        IDvector.push_back(Process::processes[ProgrammCounter]->getPid());
+                        FileNameVector.push_back(Process::processes[ProgrammCounter]->FileName);
+                        StartTimeVector.push_back(Process::processes[ProgrammCounter]->startTime);
                         EndTime.push_back(timer);
-                        VerweilzeitVector.push_back(timer-Process::processes[pc]->startTime+1);
-                        CPUTimeUsed.push_back(Process::processes[pc]->time);
-                        Akkumulator.push_back(Process::processes[pc]->reg);
-                        delete Process::processes[pc];
-                        Process::processes.erase(Process::processes.begin() + pc);
-                    } else if (Process::processes[pc]->state == BLOCKED) {
-                        blocked.push_back(Process::processes[pc]);
-                        //Process::processes.erase(Process::processes.begin() + pc);
-                    } else if (Process::processes[pc]->state == WAIT ) {
+                        VerweilzeitVector.push_back(timer - Process::processes[ProgrammCounter]->startTime + 1);
+                        CPUTimeUsed.push_back(Process::processes[ProgrammCounter]->time);
+                        Akkumulator.push_back(Process::processes[ProgrammCounter]->reg);
+                        delete Process::processes[ProgrammCounter];
+                        Process::processes.erase(Process::processes.begin() + ProgrammCounter);
+                    } else if (Process::processes[ProgrammCounter]->state == BLOCKED) {
+                        blocked.push_back(Process::processes[ProgrammCounter]);
+                        //Process::processes.erase(Process::processes.begin() + ProgrammCounter);
+                    } else if (Process::processes[ProgrammCounter]->state == WAIT ) {
                         countProc++;
 
-                        pc = calc(pc);
+                        ProgrammCounter = calc(ProgrammCounter);
                     }
                 }
             } catch (...) {
-                std::cout << std::endl << "Abort Process " << Process::processes[pc]->getPid() << std::endl;
+                std::cout << std::endl << "Abort Process " << Process::processes[ProgrammCounter]->getPid() << std::endl;
                 break;
             }
         }
@@ -249,7 +189,7 @@ int main() {
         simulateTicks--;
         timer++;
         Process::TIME = timer;
-        update(pc);
+        update(ProgrammCounter);
     }
     std::cout<<std::endl << "Shutting down..."<<std::endl;
     std::cout << "Durchschnittliche Takte per Prozess: " << EndTime[EndTime.size()-1]/countProc << std::endl;

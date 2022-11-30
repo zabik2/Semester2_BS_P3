@@ -31,6 +31,8 @@ void Process::execute() {
     std::string line;
     if (std::getline(stream, line)){
         int val;
+
+        Befehl = line;
         switch (toupper(line[0])) {
             case 'L':
                 line.erase(0,2);

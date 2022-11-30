@@ -1,6 +1,3 @@
-//
-// Created by zabik on 21.11.22.
-//
 
 #ifndef SIMPROCESS_PROCESS_H
 #define SIMPROCESS_PROCESS_H
@@ -12,7 +9,6 @@
 
 enum STATE {EXECUTE, WAIT, BLOCKED, END};
 
-
 class Process {
 
 private:
@@ -22,14 +18,12 @@ public:
     Process(const std::string &file);
     Process(int ppid, const std::string &file);
 
-    int BlockedTime;
-    std::string FileName = "init";
 
     int ppid;
     int counter;
     long time;
     std::ifstream stream;
-    int CommandCounter;
+    int priority;
     const unsigned int startTime;
     int reg;
     STATE state;
@@ -41,8 +35,6 @@ public:
     static std::vector<Process*> processes;
     static unsigned int TIME;
     static int NUM;
-
-
 };
 
 
