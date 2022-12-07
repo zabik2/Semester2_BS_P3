@@ -1,19 +1,13 @@
-//
-// Created by zabik on 21.11.22.
-//
 #include "Process.h"
-using namespace std;
-
-
 
 int Process::NUM = 0;
 unsigned int Process::TIME = -1;
 std::vector<Process*> Process::processes;
 
 Process::Process(int ppid, const std::string &file) : pid(++NUM), ppid(ppid), stream(file), startTime(TIME+1) {
-    CommandCounter = 0;
+    priority = 0;
     counter = 0;
-    state = WAIT;
+    state = WAITING;
     time = 0;
 }
 Process::Process(const string &file): Process(-1, file){}
@@ -35,41 +29,33 @@ void Process::execute() {
             case 'L':
                 line.erase(0,2);
                 reg = std::stoi(line);
-                CommandCounter++;
                 break;
             case 'A':
                 line.erase(0,2);
                 val = std::stoi(line);
                 reg += val;
-                CommandCounter++;
                 break;
             case 'S':
                 line.erase(0,2);
                 val = std::stoi(line);
                 reg -= val;
-                CommandCounter++;
                 break;
-            case 'P':
+            case 'B':
                 state = BLOCKED;
                 counter = 0;
-                BlockedTime = time;
-                CommandCounter++;
                 break;
             case 'X': {
-                CommandCounter++;
                 line.erase(0, 2);
                 int pos = line.find('\r');
                 if(pos != string::npos){
                     line.erase(pos);
                 }
                 Process* process = new Process(pid, line);
-                process->FileName = line;
                 processes.push_back(process);
                 state = WAIT;
                 break;
             }
             case 'Z':
-                CommandCounter++;
                 state = END;
                 stream.close();
                 break;
@@ -79,4 +65,5 @@ void Process::execute() {
 
     }
 }
+
 

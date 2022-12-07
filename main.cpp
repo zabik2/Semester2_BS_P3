@@ -3,27 +3,26 @@
 
 using namespace std;
 
-
 void processExec(Process &pr){
     pr.state = EXECUTE;
     pr.execute();
 }
 
 //Choose Algorithm
-enum ALG {FIRST, QUANTUMACTIVE};        //switch between Quantum used, and non-Quantum variant
+enum ALG {PARALLEL, FIRST, ROBIN};
 ALG currentAlg = FIRST;
 
 //Choose Quantum
-const int QUANTUM = 2;
+const int QUANTUM = 5;
 
 //Update PC every tick
 void update(int &pc){
-    if(!Process::processes.empty()){
-        // Block if Quantum reached
-        if(currentAlg == QUANTUMACTIVE && pc >= 0){
+    if(currentAlg != PARALLEL && !Process::processes.empty()){
+
+        if(currentAlg == ROBIN && pc >= 0){
             if(Process::processes[pc]->counter >= QUANTUM) {
                 Process::processes[pc]->counter = 0;
-                Process::processes[pc]->state = WAIT;
+                Process::processes[pc]->state = WAITING;
             }
         }
 
@@ -35,7 +34,7 @@ void update(int &pc){
                     i = 0;
                 }
                 Process *p = Process::processes[i];
-                if(p->state == WAIT && i != pc){
+                if(p->state == WAITING && i != pc){
                     //found waiting process
                     pc = i;
                     p->state = EXECUTE;
@@ -43,10 +42,31 @@ void update(int &pc){
                 }
             }
             //no process found continuing waiting one
-            if(pc >= 0 && Process::processes[pc]->state == WAIT){
+            if(pc >= 0 && Process::processes[pc]->state == WAITING){
                 Process::processes[pc]->state = EXECUTE;
             }else
                 pc = -1;
+        }
+    }else if(currentAlg == PARALLEL){
+        int count = 0;
+        int i = pc + 1;
+        if(i >= Process::processes.size()){
+            i = 0;
+        }
+        //change to next
+        for(; i <= Process::processes.size(); i++,count++) {
+            if (i >= Process::processes.size()) {
+                i = 0;
+            }
+            if (Process::processes[i]->state != BLOCKED) {
+                pc = i;
+                Process::processes[i]->state = EXECUTE;
+                break;
+            }
+            if (count >= Process::processes.size()) {
+                pc = -1;
+                break;
+            }
         }
     }
 }
@@ -61,7 +81,7 @@ int calc(int pc){
         for(int i = Process::processes.size()-1; i >= 0; i--){
             Process* p = Process::processes[i];
             if(i == oldPC && !wset){
-                p->state = WAIT;
+                p->state = WAITING;
                 wset = true;
             }
             if(i != oldPC && !curset && p->state != BLOCKED){
@@ -73,7 +93,7 @@ int calc(int pc){
                 break;
             }
         }
-    }else if(currentAlg == QUANTUMACTIVE){
+    }else if(currentAlg == ROBIN){
         //continue old process
         Process::processes[pc]->state = EXECUTE;
     }
@@ -83,32 +103,17 @@ int calc(int pc){
 int main() {
     int pc = 0;
     unsigned int timer = 0;
-    int EA = 4;
-    vector<int> IDvector;
-    vector<string>FileNameVector;
-    vector <unsigned int> StartTimeVector;
-    vector <int> EndTime;
-    vector <int> VerweilzeitVector;
-    vector <long> CPUTimeUsed;
-    vector <int> Akkumulator;
-
     unsigned int simulateTicks = 0;
-    float countProc = 1;
+    int countTicks = 0;
+    int countProc = 1;
     std::vector<Process*> blocked;
-    Process* first = new Process("init");   // launch from init
+    Process* first = new Process("init");
     Process::processes.push_back(first);
     std::cout << "System starting."<<std::endl;
 
-
     while(true){
-
         if(Process::processes.empty() && blocked.empty()){
             cout << std::endl << "No Processes!"<<std::endl;
-            cout << "pid \tFile Name \tStart time \tEnd time \tCPU Time used \t Verweilzeit \tAkkumulator" <<std::endl;
-            for (int i = 0; i <= IDvector.size()-1; i++){
-                cout << IDvector[i] << "\t" << FileNameVector[i] << " \t\t" << StartTimeVector[i] << "\t\t" << EndTime[i] << "\t\t" << CPUTimeUsed[i] << "\t\t "
-                << VerweilzeitVector[i] <<" \t\t" << Akkumulator[i] << endl;
-            }
             break;
         }
         if(pc != -1 && Process::processes.size() <= pc){
@@ -125,19 +130,24 @@ int main() {
 
             std::transform(input.begin(), input.end(), input.begin(),
                            [](unsigned char c){ return std::tolower(c); });
-            cout << "CURRENT TIME: "<<timer <<std::endl;
-            cout << "RUNNING PROCESS:" <<std::endl;
-            cout << "timer \tpid \tFileName \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
 
             if(input[0] == 's' || input == "step"){
+                int pos = input.find(' ');
                 simulateTicks = 1;
-                continue;
-            }else if(input[0] == 'u' || input == "unblock"){    // Vorzeitiges unblock
+                if(pos != string::npos){
+                    input.erase(0,pos+1);
+                    if(input.length() > 0){
+                        int arg = std::stoi(input);
+                        simulateTicks = arg;
+                        continue;
+                    }
+                }
+            }else if(input[0] == 'u' || input == "unblock"){
                 if(!blocked.empty()){
                     Process* b = blocked.front();
                     b->state = EXECUTE;
                     if(pc >= 0)
-                        Process::processes[pc]->state = WAIT;
+                        Process::processes[pc]->state = WAITING;
                     for(int i = 0; i < Process::processes.size(); i++) {
                         Process *p = Process::processes[i];
                         if(p->getPid() == b->getPid()){
@@ -148,96 +158,58 @@ int main() {
                     blocked.erase(blocked.begin());
                 }
                 continue;
-
+                
             }else if(input[0] == 'd'|| input == "dump"){
                 cout << "****************************************************************" <<std::endl;
                 cout << "The current system state is as follows:" <<std::endl;
                 cout << "****************************************************************" <<std::endl;
                 cout << "CURRENT TIME: "<<timer <<std::endl;
                 cout << "RUNNING PROCESS:" <<std::endl;
-                cout << "pid \tppid \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
+                cout << "pid \tppid \tpriority \tvalue \tstart time \tCPU time used so far" <<std::endl;
                 if(!Process::processes.empty() && pc >= 0) {
                     Process *running = Process::processes[pc];
                     if (running && running->state != BLOCKED)
-                        std::cout << running->getPid() << " \t" << running->ppid << " \t" << running->CommandCounter
+                        std::cout << running->getPid() << " \t" << running->ppid << " \t" << running->priority
                                   << " \t\t" << running->reg << " \t" << running->startTime << " \t\t" << running->time << std::endl;
                 }
                 cout << "BLOCKED PROCESS:" <<std::endl;
-                cout << "pid \tppid \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
+                cout << "pid \tppid \tpriority \tvalue \tstart time \tCPU time used so far" <<std::endl;
                 for(Process* p : blocked){
                     if(p->state == BLOCKED)
-                        std::cout << p->getPid() << " \t" << p->ppid << " \t" << p->CommandCounter << " \t\t" << p->reg << " \t" << p->startTime << " \t\t" << p->time << std::endl;
+                        std::cout << p->getPid()<<" \t"<< p->ppid<<" \t"<<p->priority<<" \t\t"<<p->reg<<" \t"<<p->startTime<<" \t\t"<<p->time <<std::endl;
                 }
                 std::cout << "PROCESS READY TO EXECUTE:" <<std::endl;
-                std::cout << "pid \tppid \tPC \tAkku \tstart time \tCPU time used so far" <<std::endl;
+                std::cout << "pid \tppid \tpriority \tvalue \tstart time \tCPU time used so far" <<std::endl;
                 for(int i = 0; i < Process::processes.size(); i++){
                     Process* p = Process::processes[i];
-                    if(p->state == WAIT && i != pc)
-                        std::cout << p->getPid() << " \t" << p->ppid << " \t" << p->CommandCounter << " \t\t" << p->reg << " \t" << p->startTime << " \t\t" << p->time << std::endl;
+                    if(p->state == WAITING && i != pc)
+                        std::cout << p->getPid()<<" \t"<< p->ppid<<" \t"<<p->priority<<" \t\t"<<p->reg<<" \t"<<p->startTime<<" \t\t"<<p->time <<std::endl;
                 }
 
-
-            }else if(input[0] == 'r' || input == "run"){
-                simulateTicks = 100;
-
-                continue;
             }else if(input[0] == 'q' || input == "quit"){
                 break;
             }
             continue;
         }
 
-
-            if (!blocked.empty()) {// EA Simulation
-                Process *b = blocked.front();
-                if (timer - b->BlockedTime >= EA){
-                b->state = EXECUTE;
-                if (pc >= 0)
-                    Process::processes[pc]->state = WAIT;
-                for (int i = 0; i < Process::processes.size(); i++) {
-                    Process *p = Process::processes[i];
-                    if (p->getPid() == b->getPid()) {
-                        pc = i;
-                        break;
-                    }
-                }
-                blocked.erase(blocked.begin());
-            }
-        }
-
-
-        if(!Process::processes.empty() && pc >= 0) {
-            Process *running = Process::processes[pc];
-            if (running && running->state != BLOCKED)
-                std::cout << timer << "\t" << running->getPid() << "\t" << running->FileName << " \t\t"  << running->CommandCounter
-                          << " \t" << running->reg << " \t" << running->startTime << " \t\t" << running->time << std::endl;
-        }
-        else
-            std::cout << timer << "\t Blocked durch EA und keine andere Prozesse verfügbar" << std::endl;
         //Sim CPU
         if(!Process::processes.empty()) {
             try {
                 if(pc >= 0) {
+                    countTicks++;
                     processExec(*Process::processes[pc]);
-
                     if (Process::processes[pc]->state == END) {
-                        simulateTicks = 1;
-                        IDvector.push_back(Process::processes[pc]->getPid());
-                        FileNameVector.push_back(Process::processes[pc]->FileName);
-                        StartTimeVector.push_back(Process::processes[pc]->startTime);
-                        EndTime.push_back(timer);
-                        VerweilzeitVector.push_back(timer-Process::processes[pc]->startTime+1);
-                        CPUTimeUsed.push_back(Process::processes[pc]->time);
-                        Akkumulator.push_back(Process::processes[pc]->reg);
                         delete Process::processes[pc];
                         Process::processes.erase(Process::processes.begin() + pc);
                     } else if (Process::processes[pc]->state == BLOCKED) {
                         blocked.push_back(Process::processes[pc]);
                         //Process::processes.erase(Process::processes.begin() + pc);
-                    } else if (Process::processes[pc]->state == WAIT ) {
+                    } else if (Process::processes[pc]->state == WAITING && currentAlg != PARALLEL) {
                         countProc++;
 
                         pc = calc(pc);
+                    }else if (currentAlg == PARALLEL) {
+                        Process::processes[pc]->state = WAITING;
                     }
                 }
             } catch (...) {
@@ -252,11 +224,6 @@ int main() {
         update(pc);
     }
     std::cout<<std::endl << "Shutting down..."<<std::endl;
-    std::cout << "Durchschnittliche Takte per Prozess: " << EndTime[EndTime.size()-1]/countProc << std::endl;
-    float VerweilzeitDurchschnitt = 0;
-    for (int i = 0; i <= VerweilzeitVector.size()-1; i++)
-        VerweilzeitDurchschnitt += VerweilzeitVector[i];
-
-    std:cout << "Durchschnittliche Verweilzeit: " << VerweilzeitDurchschnitt/(float)VerweilzeitVector.size() << std::endl;
+    std::cout << "Durchschnittliche Takte per Prozess: " << (countTicks / countProc) << std::endl;
     return 0;
 }
